@@ -70,6 +70,69 @@ The sync uses a **persistent browser profile** that saves your Amazon login sess
 
 ---
 
+### 🐧 Linux (Debian / Ubuntu / Arch / Proxmox LXC) ⭐ **STABLE**
+Run on a Linux server or container using **systemd** for 24/7 background operation.
+
+**Status:** Tested and stable for Linux environments and LXC containers.
+
+**Best for:** Users with a **Proxmox home lab, Raspberry Pi, or always-on Linux server.**
+
+### Features
+
+- ✅ **Systemd Integration** — Automatically starts on boot and restarts on failure  
+- ✅ **Headless Support** — Designed to run without a monitor (requires one-time GUI setup for login)  
+- ✅ **Lightweight** — Runs efficiently in minimal containers  
+- ✅ **Flexible Permissions** — Supports running with or without sudo  
+
+### Installation
+```bash
+cd linux
+chmod +x install.sh
+
+# Run with sudo (default)
+./install.sh
+
+# OR run as root / without sudo
+./install.sh --nosudo
+```
+The installer will:
+- Install dependencies
+- Configure the service
+- Register a **systemd background service**
+
+### Manage the Service
+Once installed, use standard `systemctl` commands:
+
+```bash
+systemctl status alexa-todoist-sync
+systemctl stop alexa-todoist-sync
+systemctl restart alexa-todoist-sync
+```
+
+View live logs:
+```bash
+journalctl -u alexa-todoist-sync -f
+```
+
+### 🛠 Troubleshooting
+
+#### Error: `Cannot find module 'puppeteer-extra'`
+
+In some environments the automated `npm install` may not correctly link the automation packages.
+
+Fix it by installing them manually:
+```bash
+cd /path/to/alexa-todoist-sync
+npm install puppeteer puppeteer-extra puppeteer-extra-plugin-stealth
+```
+
+Then verify:
+```bash
+node shared/sync.js
+```
+
+---
+
 ### ⚡ Cloudflare Workers ⚠️ **WORKS BUT NOT RECOMMENDED**
 Serverless solution with Todoist OAuth webhooks for instant syncing.
 

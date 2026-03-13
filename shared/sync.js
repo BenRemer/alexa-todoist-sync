@@ -300,7 +300,7 @@ async function syncToTodoist(items, state) {
     }
 
     try {
-      const response = await fetch('https://api.todoist.com/rest/v2/tasks', {
+      const response = await fetch('https://api.todoist.com/api/v1/tasks', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${config.todoist.apiToken}`,
@@ -377,7 +377,7 @@ async function getCompletedTodoistTasks(state) {
 
     try {
       // Fetch the task from Todoist
-      const response = await fetch(`https://api.todoist.com/rest/v2/tasks/${itemData.todoistId}`, {
+      const response = await fetch(`https://api.todoist.com/api/v1/tasks/${itemData.todoistId}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${config.todoist.apiToken}`
