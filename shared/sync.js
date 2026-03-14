@@ -158,34 +158,47 @@ async function syncToTodoist(items, state) {
 async function getCompletedTodoistTasks(state) {
   log('Checking Todoist for completed tasks', '🔍');
 
-  const res = await fetch(
-      `https://api.todoist.com/api/v1/tasks/completed?project_id=${config.todoist.projectId}&limit=200`,
-      {
-        headers: {
-          Authorization: `Bearer ${config.todoist.apiToken}`,
-          'Accept': 'application/json'
-        }
-      }
-  );
+  const since = state.lastTodoistCheck || state.lastSync || new Date(0).toISOString();
+  const until = new Date().toISOString();
 
-  if (!res.ok) {
-    log(`Failed to get completed tasks: ${res.status}`, '❌');
+  let data;
+  try {
+    const res = await fetch(
+        `https://api.todoist.com/api/v1/tasks/completed/by_completion_date?since=${encodeURIComponent(since)}&until=${encodeURIComponent(until)}&limit=200&project_id=${encodeURIComponent(config.todoist.projectId)}`,
+        {
+          headers: {
+            Authorization: `Bearer ${config.todoist.apiToken}`,
+            Accept: 'application/json',
+          },
+        }
+    );
+
+    if (!res.ok) {
+      log(`Failed to get completed tasks: ${res.status}`, '❌');
+      return [];
+    }
+
+    data = await res.json();
+  } catch (err) {
+    log(`Error fetching completed tasks: ${err.message}`, '❌');
     return [];
   }
 
-  const data = await res.json();
+  if (!Array.isArray(data.items)) {
+    log('Unexpected API response structure', '❌');
+    console.log(data);
+    return [];
+  }
 
-  // data.results is the array of completed tasks
-  const results = Array.isArray(data.results) ? data.results : [];
-
-  // Only include tasks that originated from Alexa
-  const completedContents = results
+  const completedContents = data.items
+      .filter(t => t.checked)
       .map(t => t.content)
-      .filter(Boolean)
-      .filter(name => state.syncedItems[name]);
+      .filter(Boolean);
 
   if (completedContents.length > 0) {
-    log(`Found ${completedContents.length} completed Alexa-origin task(s)`, '📋');
+    log(`Found ${completedContents.length} completed task(s)`, '📋');
+  } else {
+    log('No completed tasks found', 'ℹ️');
   }
 
   return completedContents;
