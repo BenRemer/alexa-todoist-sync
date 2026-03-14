@@ -184,7 +184,8 @@ async function launchBrowser() {
       '--disable-dev-shm-usage',
       '--disable-gpu',
       '--disable-blink-features=AutomationControlled',
-      '--window-size=1920,1080'
+      '--window-size=1920,1080',
+      '--disable-features=IsolateOrigins,site-per-process'
     ]
   })
 
