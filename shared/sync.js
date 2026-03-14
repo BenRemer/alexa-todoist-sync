@@ -234,8 +234,8 @@ async function navigateAndLogin(page) {
       });
 
       // Save cookies after successful login
-      const cookies = await page.cookies();
-      await saveCookies(cookies);
+      //const cookies = await page.cookies();
+      //await saveCookies(cookies);
       log('Login successful, cookies saved', '✅');
     } catch (error) {
       log('Login error - you may need to manually login once', '❌');
