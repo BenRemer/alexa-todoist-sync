@@ -40,12 +40,19 @@ async function saveState(state) {
 }
 
 async function ensureLoggedIn(page) {
+  // wait for redirects to finish
+  await page.waitForNavigation({
+    waitUntil: 'domcontentloaded',
+    timeout: 15000
+  }).catch(() => {})
+
   const url = page.url()
 
   if (url.includes('signin') || url.includes('/ap/')) {
+
     if (config.options.headless) {
       throw new Error(
-        'Not logged in. Run once with headless:false and login manually.'
+        'Session not authenticated. Run once with headless:false and login manually.'
       )
     }
 
@@ -147,7 +154,7 @@ async function syncToTodoist(items, state) {
 
 async function performSync(page, state) {
   await page.goto(SHOPPING_LIST_URL, {
-    waitUntil: 'networkidle2',
+    waitUntil: 'domcontentloaded',
     timeout: 60000
   })
 
