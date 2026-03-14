@@ -158,7 +158,6 @@ async function syncToTodoist(items, state) {
 async function getCompletedTodoistTasks(state) {
   log('Checking Todoist for completed tasks', '🔍');
 
-  // Fetch all completed tasks in the project
   const res = await fetch(
       `https://api.todoist.com/api/v1/tasks/completed?project_id=${config.todoist.projectId}&limit=200`,
       {
@@ -176,8 +175,11 @@ async function getCompletedTodoistTasks(state) {
 
   const data = await res.json();
 
-  // Only return completed tasks that were originally synced from Alexa
-  const completedContents = data
+  // data.results is the array of completed tasks
+  const results = Array.isArray(data.results) ? data.results : [];
+
+  // Only include tasks that originated from Alexa
+  const completedContents = results
       .map(t => t.content)
       .filter(Boolean)
       .filter(name => state.syncedItems[name]);
