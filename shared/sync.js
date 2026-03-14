@@ -60,7 +60,7 @@ async function navigateAndLogin(page) {
   log('Navigating to Alexa Shopping List...');
   await page.goto('https://www.amazon.com/alexaquantum/sp/alexaShoppingList', {
     waitUntil: 'networkidle2',
-    timeout: 60000
+    timeout: 90000
   });
 
   // Wait a bit for page to settle
@@ -72,6 +72,10 @@ async function navigateAndLogin(page) {
   // Check if we were redirected to login
   if (currentUrl.includes('signin') || currentUrl.includes('/ap/')) {
     log('Login required, entering credentials...');
+
+    // Wrap login process with timeout
+    const loginStartTime = Date.now();
+    const LOGIN_TIMEOUT = 120000;
 
     try {
       // Wait for email field - try multiple selectors
@@ -126,12 +130,17 @@ async function navigateAndLogin(page) {
       }
 
       // Wait for password page to load
-      await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 15000 }).catch(() => {
-        log('Password might be on same page');
+      await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 30000 }).catch((e) => {
+        log('Password might be on same page or took longer than expected');
       });
 
       // Wait a moment for page to fully load
       await new Promise(resolve => setTimeout(resolve, 3000));
+
+      // Check if login is taking too long
+      if (Date.now() - loginStartTime > LOGIN_TIMEOUT) {
+        throw new Error('Login process timed out');
+      }
 
       // Wait for password field - try multiple selectors
       const passwordSelectors = [
@@ -187,8 +196,13 @@ async function navigateAndLogin(page) {
         throw new Error('Could not find sign in button');
       }
 
+      // Check if login is taking too long
+      if (Date.now() - loginStartTime > LOGIN_TIMEOUT) {
+        throw new Error('Login process timed out');
+      }
+
       // Wait for navigation after login
-      await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000 }).catch(() => {
+      await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 90000 }).catch(() => {
         log('Navigation timeout - might require 2FA or CAPTCHA', '⚠️');
       });
 
@@ -623,6 +637,7 @@ async function main() {
   let browser;
   let page;
   let state;
+  let intervalId = null; // Store interval ID to prevent memory leak
 
   try {
     // Load previous state
@@ -682,8 +697,13 @@ async function main() {
     // Set up interval for ongoing syncs
     const intervalMinutes = config.options.checkIntervalMinutes || 5;
     log(`Will sync every ${intervalMinutes} minutes`, '⏱️');
-    
-    setInterval(async () => {
+
+    // Clear any existing interval to prevent memory leak
+    if (intervalId) {
+      clearInterval(intervalId);
+    }
+
+    intervalId = setInterval(async () => {
       log('Starting scheduled sync...', '🔄');
       state = await performSync(browser, page, state);
     }, intervalMinutes * 60 * 1000);
@@ -713,11 +733,31 @@ async function main() {
 // Handle graceful shutdown
 process.on('SIGINT', async () => {
   log('Shutting down gracefully...', '👋');
+
+  // Clear interval to prevent memory leak
+  if (intervalId) {
+    clearInterval(intervalId);
+  }
+
+  if (browser) {
+    await browser.close();
+  }
+
   process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
   log('Shutting down gracefully...', '👋');
+
+  // Clear interval to prevent memory leak
+  if (intervalId) {
+    clearInterval(intervalId);
+  }
+
+  if (browser) {
+    await browser.close();
+  }
+
   process.exit(0);
 });
 
