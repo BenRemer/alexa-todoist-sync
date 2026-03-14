@@ -156,37 +156,34 @@ async function syncToTodoist(items, state) {
 }
 
 async function getCompletedTodoistTasks(state) {
-  log('Checking Todoist for completed tasks', '🔍')
+  log('Checking Todoist for completed tasks', '🔍');
 
-  const completed = []
+  const since = state.lastTodoistCheck || state.lastSync || new Date(0).toISOString();
+  const until = new Date().toISOString();
 
-  for (const [itemName, data] of Object.entries(state.syncedItems)) {
-
-    if (!data.todoistId) continue
-    if (data.completedOnAlexa) continue
-
-    try {
-
-      const res = await fetch(
-          `https://api.todoist.com/api/v1/tasks/${data.todoistId}`,
-          {
-            headers: {
-              Authorization: `Bearer ${config.todoist.apiToken}`
-            }
-          }
-      )
-
-      if (res.status === 404) {
-        completed.push(itemName)
-        log(`Completed in Todoist: ${itemName}`, '✔')
+  const res = await fetch(
+      `https://api.todoist.com/api/v1/tasks/completed/by_completion_date?since=${encodeURIComponent(since)}&until=${encodeURIComponent(until)}&limit=200`,
+      {
+        headers: {
+          Authorization: `Bearer ${config.todoist.apiToken}`,
+          'Accept': 'application/json'
+        }
       }
+  );
 
-    } catch (err) {
-      log(`Todoist check failed: ${err.message}`, '⚠️')
-    }
+  if (!res.ok) {
+    log(`Failed to get completed tasks: ${res.status}`, '❌');
+    return [];
   }
 
-  return completed
+  const data = await res.json();
+  const completedContents = data.results?.map(t => t.content).filter(Boolean) ?? [];
+
+  if (completedContents.length > 0) {
+    log(`Found ${completedContents.length} completed task(s)`, '📋');
+  }
+
+  return completedContents;
 }
 
 async function markItemsCompleteOnAlexa(page, items, state) {
@@ -244,7 +241,7 @@ async function performSync(page, state) {
   state = await syncToTodoist(items, state)
 
   const completedInTodoist = await getCompletedTodoistTasks(state)
-
+  state.lastTodoistCheck = new Date().toISOString()
   state = await markItemsCompleteOnAlexa(page, completedInTodoist, state)
 
   await saveState(state)
@@ -292,7 +289,8 @@ async function launchBrowser() {
 async function main() {
   log('Starting Alexa → Todoist sync', '🚀')
 
-  const { browser, page } = await launchBrowser()
+  const { browser: b, page } = await launchBrowser()
+  browser = b
 
   let state = await loadState()
 
