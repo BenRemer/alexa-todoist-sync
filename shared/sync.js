@@ -158,11 +158,9 @@ async function syncToTodoist(items, state) {
 async function getCompletedTodoistTasks(state) {
   log('Checking Todoist for completed tasks', '🔍');
 
-  const since = state.lastTodoistCheck || state.lastSync || new Date(0).toISOString();
-  const until = new Date().toISOString();
-
+  // Fetch all completed tasks in the project
   const res = await fetch(
-      `https://api.todoist.com/api/v1/tasks/completed/by_completion_date?since=${encodeURIComponent(since)}&until=${encodeURIComponent(until)}&limit=200`,
+      `https://api.todoist.com/api/v1/tasks/completed?project_id=${config.todoist.projectId}&limit=200`,
       {
         headers: {
           Authorization: `Bearer ${config.todoist.apiToken}`,
@@ -177,10 +175,15 @@ async function getCompletedTodoistTasks(state) {
   }
 
   const data = await res.json();
-  const completedContents = data.results?.map(t => t.content).filter(Boolean) ?? [];
+
+  // Only return completed tasks that were originally synced from Alexa
+  const completedContents = data
+      .map(t => t.content)
+      .filter(Boolean)
+      .filter(name => state.syncedItems[name]);
 
   if (completedContents.length > 0) {
-    log(`Found ${completedContents.length} completed task(s)`, '📋');
+    log(`Found ${completedContents.length} completed Alexa-origin task(s)`, '📋');
   }
 
   return completedContents;
