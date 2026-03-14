@@ -17,7 +17,7 @@ try {
 
 const DRY_RUN = process.argv.includes('--dry-run');
 const STATE_FILE = path.join(__dirname, config.options.stateFile);
-const COOKIES_FILE = path.join(__dirname, 'cookies.json');
+//const COOKIES_FILE = path.join(__dirname, 'cookies.json');
 
 // Logging with timestamps
 function log(message, emoji = 'ℹ️') {
@@ -41,26 +41,26 @@ async function saveState(state) {
 }
 
 // Load cookies for persistent session
-async function loadCookies() {
-  try {
-    const data = await fs.readFile(COOKIES_FILE, 'utf8');
-    return JSON.parse(data);
-  } catch (error) {
-    return null;
-  }
-}
+//async function loadCookies() {
+//  try {
+//    const data = await fs.readFile(COOKIES_FILE, 'utf8');
+//    return JSON.parse(data);
+//  } catch (error) {
+//    return null;
+//  }
+//}
 
 // Save cookies for persistent session
-async function saveCookies(cookies) {
-  await fs.writeFile(COOKIES_FILE, JSON.stringify(cookies, null, 2));
-}
+//async function saveCookies(cookies) {
+//  await fs.writeFile(COOKIES_FILE, JSON.stringify(cookies, null, 2));
+//}
 
 // Navigate to shopping list and handle login if needed
 async function navigateAndLogin(page) {
   log('Navigating to Alexa Shopping List...');
   await page.goto('https://www.amazon.com/alexaquantum/sp/alexaShoppingList', {
     waitUntil: 'networkidle2',
-    timeout: 90000
+    timeout: 60000
   });
 
   // Wait a bit for page to settle
@@ -130,7 +130,7 @@ async function navigateAndLogin(page) {
       }
 
       // Wait for password page to load
-      await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 30000 }).catch((e) => {
+      await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 15000 }).catch((e) => {
         log('Password might be on same page or took longer than expected');
       });
 
@@ -202,7 +202,7 @@ async function navigateAndLogin(page) {
       }
 
       // Wait for navigation after login
-      await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 90000 }).catch(() => {
+      await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000 }).catch(() => {
         log('Navigation timeout - might require 2FA or CAPTCHA', '⚠️');
       });
 
@@ -213,7 +213,7 @@ async function navigateAndLogin(page) {
       if (finalUrl.includes('ap/mfa') || finalUrl.includes('ap/cvf') || finalUrl.includes('verification')) {
         log('Two-factor authentication or verification required!', '🔐');
         log('Please complete the verification in the browser window.');
-        
+
         if (config.options.headless) {
           log('Running in headless mode - cannot complete 2FA automatically', '❌');
           throw new Error('2FA required but running in headless mode');
@@ -559,18 +559,18 @@ async function markItemsCompleteOnAlexa(page, itemsToComplete, state) {
 async function performSync(browser, page, state) {
   try {
     // Reload the existing page to get fresh data
-    await page.reload({ waitUntil: 'networkidle2', timeout: 60000 });
-    
+//    await page.reload({ waitUntil: 'networkidle2', timeout: 60000 });
+
     // Alternative: navigate to shopping list URL
-    // await page.goto('https://www.amazon.com/alexaquantum/sp/alexaShoppingList', {
-    //  waitUntil: 'networkidle2',
-    //  timeout: 60000
-    // });
+    await page.goto('https://www.amazon.com/alexaquantum/sp/alexaShoppingList', {
+      waitUntil: 'networkidle2',
+      timeout: 60000
+    });
 
     await new Promise(resolve => setTimeout(resolve, 2000));
 
     const currentUrl = page.url();
-    
+
     // Check if we got logged out
     if (currentUrl.includes('signin') || currentUrl.includes('/ap/')) {
       log('Session expired, need to re-login', '⚠️');
@@ -646,18 +646,36 @@ async function main() {
     // Launch browser ONCE and keep it open
     log('Launching persistent browser session...');
     const userDataDir = path.join(__dirname, '.browser-profile');
+//    browser = await puppeteer.launch({
+//      headless: config.options.headless ? 'new' : false,
+//      userDataDir: userDataDir,
+//      args: [
+//        '--no-sandbox',
+//        '--disable-setuid-sandbox',
+//        '--disable-dev-shm-usage',
+//        '--disable-blink-features=AutomationControlled'
+//      ]
+//    });
     browser = await puppeteer.launch({
       headless: config.options.headless ? 'new' : false,
       userDataDir: userDataDir,
+      executablePath: '/usr/bin/google-chrome',
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
         '--disable-blink-features=AutomationControlled'
       ]
     });
 
     page = await browser.newPage();
+
+    // hide webdriver flag
+    await page.evaluateOnNewDocument(() => {
+      Object.defineProperty(navigator, 'webdriver', {
+        get: () => undefined
+      });
+    });
+
 
     // Set realistic browser properties to avoid detection
     await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36');
@@ -667,11 +685,11 @@ async function main() {
     });
 
     // Load saved cookies if they exist
-    const cookies = await loadCookies();
-    if (cookies) {
-      await page.setCookie(...cookies);
-      log('Loaded saved cookies', '🍪');
-    }
+    //const cookies = await loadCookies();
+    //if (cookies) {
+    //  await page.setCookie(...cookies);
+    //  log('Loaded saved cookies', '🍪');
+    //}
 
     // Navigate to shopping list and login if needed (only auto-login in headless mode)
     if (config.options.headless) {
@@ -714,7 +732,7 @@ async function main() {
   } catch (error) {
     log(`Fatal error: ${error.message}`, '❌');
     console.error(error);
-    
+
     // If not headless, keep browser open so user can manually fix the issue
     if (!config.options.headless) {
       log('Browser window left open - you can manually login and then restart the script', '⚠️');
