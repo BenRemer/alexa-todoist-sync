@@ -135,7 +135,8 @@ async function syncToTodoist(items, state) {
 
         state.syncedItems[item] = {
           todoistId: task.id,
-          syncedAt: new Date().toISOString()
+          syncedAt: new Date().toISOString(),
+          completedOnAlexa: false
         }
 
         log(`Synced: ${item}`, '✅')
@@ -152,6 +153,82 @@ async function syncToTodoist(items, state) {
   return state
 }
 
+async function getCompletedTodoistTasks(state) {
+  log('Checking Todoist for completed tasks', '🔍')
+
+  const completed = []
+
+  for (const [itemName, data] of Object.entries(state.syncedItems)) {
+
+    if (!data.todoistId) continue
+    if (data.completedOnAlexa) continue
+
+    try {
+
+      const res = await fetch(
+          `https://api.todoist.com/api/v1/tasks/${data.todoistId}`,
+          {
+            headers: {
+              Authorization: `Bearer ${config.todoist.apiToken}`
+            }
+          }
+      )
+
+      if (res.status === 404) {
+        completed.push(itemName)
+        log(`Completed in Todoist: ${itemName}`, '✔')
+      }
+
+    } catch (err) {
+      log(`Todoist check failed: ${err.message}`, '⚠️')
+    }
+  }
+
+  return completed
+}
+
+async function markItemsCompleteOnAlexa(page, items, state) {
+
+  if (!items.length) return state
+
+  log(`Marking ${items.length} items complete on Alexa`, '🔄')
+
+  for (const name of items) {
+
+    const success = await page.evaluate(itemName => {
+
+      const elements = [...document.querySelectorAll('.item-title,h3')]
+
+      for (const el of elements) {
+
+        const text = el.textContent.trim().toLowerCase()
+
+        if (text === itemName.toLowerCase()) {
+
+          const row = el.closest('li,div')
+          const checkbox = row?.querySelector('input[type="checkbox"]')
+
+          if (checkbox && !checkbox.checked) {
+            checkbox.click()
+            return true
+          }
+        }
+      }
+
+      return false
+
+    }, name)
+
+    if (success) {
+      state.syncedItems[name].completedOnAlexa = true
+      state.syncedItems[name].completedAt = new Date().toISOString()
+      log(`Completed on Alexa: ${name}`, '✓')
+    }
+  }
+
+  return state
+}
+
 async function performSync(page, state) {
   await page.goto(SHOPPING_LIST_URL, {
     waitUntil: 'domcontentloaded',
@@ -163,6 +240,10 @@ async function performSync(page, state) {
   const items = await extractItems(page)
 
   state = await syncToTodoist(items, state)
+
+  const completedInTodoist = await getCompletedTodoistTasks(state)
+
+  state = await markItemsCompleteOnAlexa(page, completedInTodoist, state)
 
   await saveState(state)
 
