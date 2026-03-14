@@ -205,45 +205,42 @@ async function getCompletedTodoistTasks(state) {
 }
 
 async function markItemsCompleteOnAlexa(page, items, state) {
+  if (!items.length) return state;
 
-  if (!items.length) return state
-
-  log(`Marking ${items.length} items complete on Alexa`, '🔄')
+  log(`Marking ${items.length} items complete on Alexa`, '🔄');
 
   for (const name of items) {
-
     const success = await page.evaluate(itemName => {
-
-      const elements = [...document.querySelectorAll('.item-title,h3')]
+      // Find all shopping list items
+      const elements = [...document.querySelectorAll('.item-title')];
 
       for (const el of elements) {
-
-        const text = el.textContent.trim().toLowerCase()
+        const text = el.textContent.trim().toLowerCase();
 
         if (text === itemName.toLowerCase()) {
+          // Find the closest custom checkbox label
+          const row = el.closest('li, div.inner');
+          const checkboxLabel = row?.querySelector('.custom-checkbox label');
 
-          const row = el.closest('li,div')
-          const checkbox = row?.querySelector('input[type="checkbox"]')
-
-          if (checkbox && !checkbox.checked) {
-            checkbox.click()
-            return true
+          if (checkboxLabel) {
+            checkboxLabel.click(); // Click the label, not the input
+            return true;
           }
         }
       }
-
-      return false
-
-    }, name)
+      return false;
+    }, name);
 
     if (success) {
-      state.syncedItems[name].completedOnAlexa = true
-      state.syncedItems[name].completedAt = new Date().toISOString()
-      log(`Completed on Alexa: ${name}`, '✓')
+      state.syncedItems[name].completedOnAlexa = true;
+      state.syncedItems[name].completedAt = new Date().toISOString();
+      log(`Completed on Alexa: ${name}`, '✓');
+    } else {
+      log(`❌ Could not find clickable checkbox for: ${name}`);
     }
   }
 
-  return state
+  return state;
 }
 
 async function performSync(page, state) {
