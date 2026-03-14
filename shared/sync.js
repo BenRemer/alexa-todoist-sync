@@ -11,6 +11,8 @@ const SHOPPING_LIST_URL =
   'https://www.amazon.com/alexaquantum/sp/alexaShoppingList'
 
 let config
+let browser = null
+let intervalId = null
 
 try {
   config = require('./config.json')
@@ -300,13 +302,36 @@ async function main() {
 
   log(`Running every ${interval / 60000} minutes`, '⏱️')
 
-  setInterval(async () => {
+  intervalId = setInterval(async () => {
     try {
       state = await performSync(page, state)
     } catch (err) {
-      log(err.message, '❌')
+      console.error(err.message)
     }
   }, interval)
 }
+
+async function shutdown() {
+  console.log(`[${new Date().toLocaleString()}] 👋 Shutting down gracefully...`)
+
+  if (intervalId) {
+    clearInterval(intervalId)
+    intervalId = null
+  }
+
+  if (browser) {
+    try {
+      await browser.close()
+    } catch (err) {
+      console.error('Error closing browser:', err.message)
+    }
+    browser = null
+  }
+
+  process.exit(0)
+}
+
+process.on('SIGINT', shutdown)
+process.on('SIGTERM', shutdown)
 
 main()
