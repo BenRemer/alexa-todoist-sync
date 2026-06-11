@@ -72,35 +72,80 @@ async function ensureLoggedIn(page) {
 }
 
 async function extractItems(page) {
-  log('Extracting Alexa items')
+  log('Extracting Alexa items from React virtual list...', '🕵️')
 
-  await page.waitForSelector('.item-body,.shopping-list-container', {
+  // Wait for the new virtual list to render
+  await page.waitForSelector('.virtual-list, .item-title', {
     timeout: 20000
-  })
+  }).catch(() => log('Virtual list not found, trying anyway...', '⚠️'));
 
-  const items = await page.evaluate(() => {
-    const selectors = [
-      '.item-body .item-title',
-      '[data-item-name]',
-      '.shopping-list-item .item-name'
-    ]
-
-    for (const s of selectors) {
-      const els = document.querySelectorAll(s)
-
-      if (els.length) {
-        return [...els]
-          .map(e => e.dataset.itemName || e.textContent.trim())
-          .filter(Boolean)
-      }
+  const items = await page.evaluate(async () => {
+    console.log('Starting virtual list extraction...');
+    
+    // Use a Set to automatically deduplicate items as we scroll
+    const uniqueItems = new Set();
+    
+    // The main container that holds all the absolute positioned rows
+    const listContainer = document.querySelector('.virtual-list');
+    
+    if (!listContainer) {
+       console.log('❌ Could not find .virtual-list. Fallback to static extraction.');
+       // Fallback for static lists
+       const els = document.querySelectorAll('.item-title, [data-item-name]');
+       els.forEach(el => {
+          const name = el.dataset?.itemName || el.textContent.trim();
+          if (name) uniqueItems.add(name);
+       });
+       return Array.from(uniqueItems);
     }
 
-    return []
-  })
+    // Function to extract currently visible items
+    const scrapeVisible = () => {
+        const els = document.querySelectorAll('.item-title');
+        let foundNew = false;
+        els.forEach(el => {
+            const name = el.textContent.trim();
+            if (name && !uniqueItems.has(name)) {
+                uniqueItems.add(name);
+                foundNew = true;
+                console.log(`Extracted: "${name}" (Total: ${uniqueItems.size})`);
+            }
+        });
+        return foundNew;
+    };
 
-  log(`Found ${items.length} items`, '📝')
+    // Scroll through the virtual list
+    await new Promise((resolve) => {
+        let lastSize = 0;
+        let noNewItemsCount = 0;
+        const maxNoNew = 5; // Stop after 5 scrolls with no new items
+        const distance = 400; // Pixels to scroll down each step
+        
+        const timer = setInterval(() => {
+            scrapeVisible();
+            
+            // Scroll the specific virtual list container
+            listContainer.scrollBy(0, distance);
+            
+            if (uniqueItems.size === lastSize) {
+                noNewItemsCount++;
+                console.log(`No new items found. Retry ${noNewItemsCount}/${maxNoNew}`);
+                if (noNewItemsCount >= maxNoNew) {
+                    clearInterval(timer);
+                    resolve();
+                }
+            } else {
+                lastSize = uniqueItems.size;
+                noNewItemsCount = 0; // Reset if we found something
+            }
+        }, 300); // Check every 300ms
+    });
 
-  return items
+    return Array.from(uniqueItems);
+  });
+
+  log(`Extracted ${items.length} items from virtual list.`, '📝')
+  return items;
 }
 
 async function syncToTodoist(items, state) {
